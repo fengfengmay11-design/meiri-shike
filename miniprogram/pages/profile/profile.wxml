@@ -90,7 +90,7 @@ module.exports.contains = function (arr, v) {
         </view>
       </view>
       <view class="custom-tip" wx:if="{{recording}}">正在聆听，说完后点击停止</view>
-      <view class="custom-tip" wx:elif>{{sheetKey === 'prefer' ? 'AI 推荐会参考这段文字；本地模式仅做关键词匹配' : 'AI 推荐会避开这些内容；本地模式仅做关键词匹配'}}</view>
+      <view class="custom-tip" wx:else>{{sheetKey === 'prefer' ? 'AI 推荐会参考这段文字；本地模式仅做关键词匹配' : 'AI 推荐会避开这些内容；本地模式仅做关键词匹配'}}</view>
     </view>
 
     <button class="btn-primary sheet-done" bindtap="closeSheet">完成</button>

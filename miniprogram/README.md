@@ -19,30 +19,31 @@ what-to-eat-miniprogram/
 ├── utils/
 │   ├── recipes.js        内置菜谱库
 │   ├── storage.js        偏好/状态/每日记录本地存储封装
-│   └── mealGenerator.js  本地规则推荐生成器（AI 兜底）
+│   ├── mealGenerator.js  本地规则推荐生成器（AI 兜底）
+│   ├── aiConfig.js       大模型配置（Key / 接口地址 / 模型名）
+│   └── hunyuan.js        前端直连混元封装（路 B，无需云开发）
 └── cloudfunctions/
-    └── generateMeal/     云函数：接大模型生成推荐（可选）
+    └── generateMeal/     云函数方案（路 A，可选，需付费云环境）
 ```
 
 ## 快速预览（无需后端）
 
-用**微信开发者工具**导入 `what-to-eat-miniprogram` 目录即可运行（appid 选「测试号」或你自己的）。
-默认走**本地规则生成**，打开「推荐」页会自动出 3 餐，立刻能看到效果，不需要任何后端配置。
+用**微信开发者工具**导入 `what-to-eat-miniprogram` 目录即可运行（appid 已填你的 `wx075b9f5d800ab646`）。
+打开「推荐」页会自动出 3 餐，立刻能看到效果，不需要任何后端配置。
 
 > 想先在电脑浏览器里看三屏效果？工程同级目录有 `preview.html`（网页预览版），双击用浏览器打开即可，逻辑与小程序一致。
 
-## 接入 AI 大模型（可选，推荐更灵活）
+## 接入 AI 大模型（已默认开启 · 路 B 前端直连）
 
-推荐页逻辑：已开通云开发且部署了 `generateMeal` 云函数 → 优先走 AI；否则自动回退本地规则。
-接入步骤：
+当前采用**路 B**：小程序前端通过 `utils/hunyuan.js` 直接调用混元大模型，**不需要云开发、0 成本**。
+Key 已配置在 `utils/aiConfig.js`，打开即用：
 
-1. 微信开发者工具里对该项目**开通云开发**，记下环境 ID。
-2. 右键 `cloudfunctions/generateMeal` → 上传并部署（云端安装）。
-3. 在云函数「配置 → 环境变量」填入：
-   - `AI_API_KEY`：你的模型 Key（必填）
-   - `AI_BASE_URL`：兼容 OpenAI 的接口地址，默认腾讯混元 `https://api.hunyuan.cloud.tencent.com/v1`
-   - `AI_MODEL`：模型名，默认 `hunyuan-turbo`（也可填 DeepSeek / 通义等兼容接口）
-4. 打开 `app.js`，取消 `wx.cloud.init(...)` 那段注释，填入你的环境 ID，`globalData.cloudReady` 置为 `true`，重新编译即可。
+- 推荐页「一键推荐」→ 标注 **AI 推荐**（调用混元生成结构化餐单）
+- 推荐页「AI 营养师」浮窗 → 真 AI 问答
+
+如要关闭真 AI、退回本地规则：把 `utils/aiConfig.js` 里的 `AI_API_KEY` 改成 `''` 即可。
+
+> 生产级安全方案（路 A，需付费云环境）：见工程 `cloudfunctions/` 目录，Key 存云端环境变量，前端不暴露。
 
 云函数会要求模型返回结构化 JSON（风味、主食、菜、水果、能量、建议），前端直接渲染。
 
@@ -53,8 +54,8 @@ what-to-eat-miniprogram/
 - **状态/菜系/忌口**选项都在 `utils/mealGenerator.js`（状态能量区间）与 `pages/profile/profile.js`（选项列表）里，直接改数组即可增删。
 - 推荐逻辑同时支持「本地规则」与「AI 生成」两套，互不冲突。
 
-## 转成正式小程序上线
+## 转成正式小程序上线（路 B 注意点）
 
-1. 微信公众平台注册小程序，拿到真实 AppID，替换 `project.config.json` 里的 `appid`。
-2. 开通云开发并部署云函数（如上）。
-3. 开发者工具「上传」代码，在平台提交审核发布。
+1. 微信公众平台 → 开发 → 开发设置 → **服务器域名** → `request 合法域名` 添加 `https://tokenhub.tencentmaas.com`（开发阶段 `project.config.json` 里 `urlCheck:false` 已可免去这步，仅真机预览/发布需要）。
+2. 开发者工具「上传」代码，在平台提交审核发布。
+3. ⚠️ 路 B 的 Key 写在前端，发布前建议评估泄露风险；要彻底安全请切回路 A（云函数）。

@@ -1,18 +1,17 @@
 // app.js
-// 全局状态：是否启用了云开发（接入 AI 大模型需要）
+// 路 B 方案：AI 由小程序前端直连混元（utils/hunyuan.js），不依赖云开发。
+// 若要切回云函数方案（路 A），在 utils/aiConfig.js 把 AI_API_KEY 留空，
+// 并恢复下方 wx.cloud.init + 云函数部署即可。
 App({
   globalData: {
-    // 设为 true 表示已开通云开发并部署了 generateMeal 云函数，推荐页会优先走 AI
-    cloudReady: false,
-    // 云开发环境 ID，开通云开发后在微信开发者工具里查看并填入
-    cloudEnv: ''
+    // 当前用路 B：前端直连，无需云开发
+    useCloud: false
   },
 
   onLaunch() {
-    // 若要启用 AI 推荐，取消下面这段注释并填入真实环境 ID：
+    // 路 B 不需要云开发初始化；如切回路 A，取消下面注释并填真实环境 ID：
     // if (wx.cloud) {
-    //   wx.cloud.init({ env: this.globalData.cloudEnv, traceUser: true });
-    //   this.globalData.cloudReady = true;
+    //   wx.cloud.init({ env: '你的环境ID', traceUser: true });
     // }
   }
 });

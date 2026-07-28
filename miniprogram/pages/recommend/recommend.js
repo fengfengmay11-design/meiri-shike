@@ -3,6 +3,7 @@ const storage = require('../../utils/storage.js');
 const mealGenerator = require('../../utils/mealGenerator.js');
 const canteens = require('../../utils/canteens.js');
 const aiNutritionist = require('../../utils/aiNutritionist.js');
+const hunyuan = require('../../utils/hunyuan.js');
 
 const QUICK = [
   { key: 'week', label: '近一周', days: 7 },
@@ -189,19 +190,14 @@ Page({
     var excludeTitles = this.data.meals.map(function (m) { return m.title; });
     this.setData({ loading: true });
 
-    var app = getApp();
-    if (app.globalData && app.globalData.cloudReady) {
-      wx.cloud.callFunction({
-        name: 'generateMeal',
-        data: { status: self.data.curStatus, profile: profile, excludeTitles: excludeTitles },
-        success: function (res) {
-          if (res.result && res.result.meals && res.result.meals.length) {
-            self.applyMeals(res.result.meals, 'AI 推荐');
-          } else {
-            self.localGenerate(excludeTitles);
-          }
-        },
-        fail: function () { self.localGenerate(excludeTitles); }
+    if (hunyuan.isEnabled()) {
+      // 路 B：前端直连混元，走真 AI
+      hunyuan.generateMeals(self.data.curStatus, profile, excludeTitles).then(function (meals) {
+        if (meals && meals.length) {
+          self.applyMeals(meals, 'AI 推荐');
+        } else {
+          self.localGenerate(excludeTitles);
+        }
       });
     } else {
       self.localGenerate(excludeTitles);
@@ -258,8 +254,9 @@ Page({
     var msgs = this.data.aiMsgs.concat([{ role: 'user', text: text }]);
     this.setData({ aiMsgs: msgs, aiInput: '', aiScrollTo: 'aim' + (msgs.length - 1) });
     var self = this;
-    // 模拟 AI 思考延迟
-    setTimeout(function () {
+
+    // 本地规则兜底回复
+    function localReply() {
       var reply = aiNutritionist.answer(text, {
         status: self.data.curStatus,
         profile: storage.getProfile(),
@@ -267,7 +264,34 @@ Page({
       });
       var msgs2 = self.data.aiMsgs.concat([{ role: 'ai', text: reply }]);
       self.setData({ aiMsgs: msgs2, aiScrollTo: 'aim' + (msgs2.length - 1) });
-    }, 500);
+    }
+
+    var app = getApp();
+    if (hunyuan.isEnabled()) {
+      // 路 B：前端直连混元走真 AI，失败回退本地规则
+      var thinking = self.data.aiMsgs.concat([{ role: 'ai', text: '正在思考…' }]);
+      self.setData({ aiMsgs: thinking, aiScrollTo: 'aim' + (thinking.length - 1) });
+      hunyuan.chat(
+        text,
+        self.data.curStatus,
+        storage.getProfile(),
+        { org: self.data.userOrg, campus: self.data.userCampus },
+        msgs.slice(-6)
+      ).then(function (reply) {
+        if (reply) {
+          // 用真实回复替换「正在思考…」占位
+          var replaced = self.data.aiMsgs.slice(0, -1).concat([{ role: 'ai', text: reply }]);
+          self.setData({ aiMsgs: replaced, aiScrollTo: 'aim' + (replaced.length - 1) });
+        } else {
+          // 云端无有效回复：撤掉占位，走本地规则
+          self.setData({ aiMsgs: self.data.aiMsgs.slice(0, -1) });
+          localReply();
+        }
+      });
+    } else {
+      // 未配置 Key：本地规则引擎，带一点思考延迟
+      setTimeout(localReply, 500);
+    }
   },
 
   noop() {}
