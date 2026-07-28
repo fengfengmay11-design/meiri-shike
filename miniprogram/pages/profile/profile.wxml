@@ -1,0 +1,98 @@
+<!-- pages/profile/profile.wxml -->
+<wxs module="m">
+module.exports.contains = function (arr, v) {
+  return arr && arr.indexOf(v) >= 0;
+}
+</wxs>
+
+<view class="page">
+  <view class="card intro">
+    <view class="title">口味偏好设置</view>
+    <view class="subtitle">推荐餐会优先贴合你的偏好，并避开所有忌口</view>
+  </view>
+
+  <!-- 🎙️ 智能识别 -->
+  <view class="card nl-card">
+    <view class="nl-title">🎙️ 智能识别</view>
+    <view class="nl-sub">直接说或写你的饮食习惯，AI 自动提取偏好和忌口</view>
+    <view class="nl-row">
+      <textarea class="nl-input" placeholder='例如："我不吃辣和香菜，特别喜欢川菜，对海鲜过敏"' value="{{nlText}}" bindinput="onNlInput" maxlength="200"></textarea>
+      <view class="nl-voice {{nlRecording ? 'nl-voice-on' : ''}}" bindtap="startNlVoice">{{nlRecording ? '⏹' : '🎤'}}</view>
+    </view>
+    <view class="nl-status" wx:if="{{nlRecording}}">● 正在聆听，请说话...</view>
+    <button class="btn-primary nl-btn" bindtap="analyzeNl">✨ AI 分析</button>
+    <view class="nl-result" wx:if="{{nlResult}}">
+      <rich-text nodes="{{nlResult}}"></rich-text>
+    </view>
+  </view>
+
+  <!-- 两个大框：偏好 / 忌口 -->
+  <view
+    class="block"
+    wx:for="{{blocks}}"
+    wx:key="key"
+    bindtap="openBlock"
+    data-key="{{item.key}}"
+  >
+    <view class="block-icon">{{item.icon}}</view>
+    <view class="block-main">
+      <view class="block-title">{{item.title}}</view>
+      <view class="block-summary" wx:if="{{summaries[item.key].length}}">
+        <text wx:for="{{summaries[item.key]}}" wx:for-item="s" wx:key="*this" class="block-tag">{{s}}</text>
+      </view>
+      <view class="block-summary empty" wx:else>未设置，点击选择</view>
+    </view>
+    <view class="block-arrow">›</view>
+  </view>
+
+  <button class="btn-primary save-btn" bindtap="save">保存偏好</button>
+  <view class="save-tip">设置后回到「推荐」页，生成会更贴合你的口味</view>
+</view>
+
+<!-- 底部弹层：选择偏好 / 忌口 -->
+<view wx:if="{{sheetOpen}}" class="overlay" bindtap="closeSheet">
+  <view class="sheet" catchtap="noop">
+    <view class="sheet-handle"></view>
+    <view class="sheet-head">
+      <text class="sheet-title">{{sheetIcon}} {{sheetTitle}}</text>
+      <text class="sheet-shut" bindtap="closeSheet">✕</text>
+    </view>
+
+    <view class="sheet-group" wx:for="{{sheetGroups}}" wx:key="key">
+      <view class="sheet-group-label">{{item.label}}</view>
+      <view class="chips">
+        <view
+          wx:for="{{item.items}}"
+          wx:for-item="opt"
+          wx:key="*this"
+          class="chip {{m.contains(profile[item.key], opt) ? 'chip-on' : ''}}"
+          data-group="{{item.key}}"
+          data-val="{{opt}}"
+          bindtap="toggleInSheet"
+        >{{opt}}</view>
+      </view>
+    </view>
+
+    <!-- 自由填写补充 -->
+    <view class="sheet-custom">
+      <view class="sheet-group-label">{{sheetKey === 'prefer' ? '还想吃的（自由填写）' : '还忌口的（自由填写）'}}</view>
+      <view class="custom-row">
+        <textarea
+          class="custom-input"
+          placeholder="{{sheetKey === 'prefer' ? '例如：想吃海鲜、多补充蛋白、来点辣的' : '例如：对花生过敏、不吃牛肉、少油少盐'}}"
+          value="{{sheetKey === 'prefer' ? profile.customPrefer : profile.customAvoid}}"
+          bindinput="onInputCustom"
+          data-field="{{sheetKey}}"
+          maxlength="200"
+        ></textarea>
+        <view class="voice-btn {{recording ? 'recording' : ''}}" bindtap="startVoiceInput" catchtap="startVoiceInput">
+          <text class="voice-icon">{{recording ? '⏹' : '🎤'}}</text>
+        </view>
+      </view>
+      <view class="custom-tip" wx:if="{{recording}}">正在聆听，说完后点击停止</view>
+      <view class="custom-tip" wx:elif>{{sheetKey === 'prefer' ? 'AI 推荐会参考这段文字；本地模式仅做关键词匹配' : 'AI 推荐会避开这些内容；本地模式仅做关键词匹配'}}</view>
+    </view>
+
+    <button class="btn-primary sheet-done" bindtap="closeSheet">完成</button>
+  </view>
+</view>

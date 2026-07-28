@@ -1,0 +1,139 @@
+<!-- pages/health/health.wxml -->
+<view class="page">
+  <!-- 当日概览 -->
+  <view class="card today-card" bindtap="openToday">
+    <!-- 第一行：日期 | 头像 | 设目标 -->
+    <view class="today-top">
+      <view class="today-date">{{todayDateLabel}}</view>
+      <view class="today-top-right">
+        <image
+          class="today-avatar {{avatarUrl ? '' : 'avatar-placeholder'}}"
+          src="{{avatarUrl || ''}}"
+          mode="aspectFill"
+          bindtap="chooseAvatar"
+          catchtap="chooseAvatar"
+        >📷</image>
+        <view class="target-btn" catchtap="editTarget">✎ 目标</view>
+      </view>
+    </view>
+
+    <!-- 第二行：两大指标 -->
+    <view class="today-row">
+      <view class="metric">
+        <view class="metric-num"><text class="metric-main">{{todaySteps}}</text><text class="metric-sub">/{{stepTarget}}</text></view>
+        <view class="metric-label">今日步数</view>
+      </view>
+      <view class="metric">
+        <view class="metric-num"><text class="metric-main">{{energyBurn}}</text><text class="metric-sub">/{{energyTarget}}</text></view>
+        <view class="metric-label">能量消耗(kcal)</view>
+      </view>
+    </view>
+
+    <!-- 第三行：进度条（内嵌百分比） -->
+    <view class="prog-row">
+      <view class="prog-bar"><view class="prog-fill" style="width:{{progress}}%"></view></view>
+      <text class="prog-pct">{{progress}}%</text>
+    </view>
+  </view>
+
+  <!-- 当月日历 -->
+  <view class="card">
+    <view class="cal-title">{{todayDateLabel.slice(0, 8)}} 日历</view>
+    <view class="cal-week">
+      <view wx:for="{{weekHead}}" wx:key="*this" class="cal-week-cell">{{item}}</view>
+    </view>
+    <view class="cal-grid">
+      <view
+        wx:for="{{calendar}}"
+        wx:key="dateStr"
+        class="cal-cell {{item.empty ? 'cal-empty' : ''}} {{item.isToday ? 'cal-today' : ''}}"
+        data-date="{{item.dateStr}}"
+        bindtap="openPopover"
+      >
+        <block wx:if="{{!item.empty}}">
+          <text class="cal-day">{{item.day}}</text>
+          <text wx:if="{{item.has}}" class="cal-dot"></text>
+        </block>
+      </view>
+    </view>
+    <view class="cal-legend">· 有记录的日子会显示小圆点，点它浮出当日小窗</view>
+  </view>
+</view>
+
+<!-- 由小变大浮出的小窗（左右滑动切换日期） -->
+<view wx:if="{{popOpen}}" class="pop-mask {{popClosing ? 'mask-closing' : ''}}" bindtap="closePopover">
+  <view
+    class="pop {{popEntering ? 'pop-enter' : ''}} {{popClosing ? 'pop-closing' : ''}}"
+    catchtouchstart="onPopTouchStart"
+    catchtouchend="onPopTouchEnd"
+  >
+    <!-- 头部：日期 + 关闭 -->
+    <view class="pop-head">
+      <view class="pop-date">{{pop.dateLabel}}</view>
+      <view class="pop-shut" catchtap="closePopover">✕</view>
+    </view>
+
+    <!-- 左右切换栏 -->
+    <view class="pop-switch">
+      <view class="pop-sw-btn" catchtap="prevDay">‹ 上一天</view>
+      <view class="pop-sw-hint">← 左右滑动切换 →</view>
+      <view class="pop-sw-btn" catchtap="nextDay">下一天 ›</view>
+    </view>
+
+    <scroll-view scroll-y class="pop-scroll">
+      <!-- 紧凑信息 -->
+      <view class="pop-metrics">
+        <view class="pop-metric">
+          <view class="pop-num">{{pop.steps}}</view>
+          <view class="pop-l">步数</view>
+        </view>
+        <view class="pop-metric">
+          <view class="pop-num">{{pop.energy}}</view>
+          <view class="pop-l">能量(kcal)</view>
+        </view>
+        <view class="pop-metric">
+          <view class="pop-num">{{pop.weight || '—'}}</view>
+          <view class="pop-l">体重(kg)</view>
+        </view>
+      </view>
+
+      <!-- 记录区（小窗内可直接改） -->
+      <view class="pop-fields">
+        <view class="pop-field">
+          <text class="pop-fl">步数</text>
+          <input class="pop-fi" type="number" value="{{pop.steps}}" bindinput="onInputSteps" placeholder="今天走了多少步" />
+        </view>
+        <view class="pop-field">
+          <text class="pop-fl">体重</text>
+          <input class="pop-fi" value="{{pop.weight}}" bindinput="onInputWeight" placeholder="可选" />
+        </view>
+      </view>
+
+      <!-- 餐食照片：按早中晚三餐分组 -->
+      <view class="pop-photo-title">
+        <text>餐食照片</text>
+      </view>
+      <view class="photo-sec" wx:for="{{photoSections}}" wx:key="key">
+        <view class="photo-sec-head">
+          <text class="photo-sec-label">{{item.label}}</text>
+          <view class="photo-sec-actions">
+            <text class="photo-action" data-meal="{{item.key}}" catchtap="uploadPhoto">+ 上传</text>
+            <text class="photo-action photo-action-wx" data-meal="{{item.key}}" catchtap="importFromChat">💬 微信导入</text>
+          </view>
+        </view>
+        <scroll-view scroll-x class="photo-sec-scroll" wx:if="{{item.photos.length}}">
+          <view class="photo-thumb" wx:for="{{item.photos}}" wx:for-item="src" wx:key="*this" data-url="{{src}}" data-meal="{{item.key}}" catchtap="previewPhoto">
+            <image class="photo-thumb-img" src="{{src}}" mode="aspectFill"></image>
+            <view class="photo-del" data-meal="{{item.key}}" data-idx="{{index}}" catchtap="removePhoto">×</view>
+          </view>
+        </scroll-view>
+        <view wx:else class="photo-empty-sm">还没有照片</view>
+      </view>
+    </scroll-view>
+
+    <view class="pop-foot">
+      <view class="pop-hint">左右滑动切换日期 · 点空白处关闭</view>
+      <view class="pop-save" catchtap="saveDetail">保存</view>
+    </view>
+  </view>
+</view>

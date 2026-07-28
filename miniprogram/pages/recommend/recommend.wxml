@@ -1,0 +1,219 @@
+<!-- pages/recommend/recommend.wxml -->
+<view class="page">
+
+  <!-- 近期状态 -->
+  <view class="card" bindtap="openStatusSheet">
+    <view class="field-row">
+      <text class="field-label">近期状态</text>
+      <text class="field-value">{{curStatusLabel}}</text>
+      <text class="field-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 时间段 + 完成度（同一水平） -->
+  <view class="prog-card">
+    <view class="prog-line">
+      <view class="date-chip" bindtap="openDateSheet">
+        <text class="date-chip-text">{{dateSummary}}</text>
+        <text class="date-chip-arrow">▾</text>
+      </view>
+      <text class="prog-percent">已坚持 {{progress}}%</text>
+    </view>
+    <view class="track">
+      <view class="track-bg"></view>
+      <view class="track-fill" style="width:{{progress}}%"></view>
+      <view class="track-dot" style="left:{{progress}}%">{{curStatusEmoji}}</view>
+    </view>
+    <text class="prog-sub">{{progressText}}</text>
+  </view>
+
+  <!-- 餐食引导语 -->
+  <view class="hint-text" wx:if="{{curStatusLabel}}">{{curStatusEmoji}} {{curStatusLabel}} · 为你定制 {{curStatusLabel}} 专属餐食</view>
+
+  <!-- 一键推荐 -->
+  <button class="gen-btn" bindtap="generateMeals" loading="{{loading}}">
+    <text class="gen-icon">✨</text><text>一键推荐</text>
+  </button>
+  <view wx:if="{{source}}" class="source-tag">{{source}}</view>
+
+  <!-- 推荐结果 -->
+  <view wx:if="{{loading}}" class="busy">正在为你搭配…</view>
+
+  <view
+    wx:for="{{meals}}"
+    wx:key="flavorKey"
+    class="meal-card"
+    data-idx="{{index}}"
+    bindtap="openMeal"
+  >
+    <view class="meal-tag">{{item.mealType==='breakfast'?'🥐 早餐':item.mealType==='dinner'?'🌙 晚餐':'🍱 午餐'}}</view>
+    <view class="meal-top">
+      <text class="meal-flavor">{{item.dishName}}</text>
+      <text class="meal-kcal">约 {{item.totalKcal}} kcal</text>
+    </view>
+    <view class="meal-reason">{{item.reason}}</view>
+    <view class="meal-hint">点击查看详情 ›</view>
+  </view>
+
+  <view wx:if="{{!meals.length && !loading}}" class="empty-hint">点上方「一键推荐」生成今日餐食</view>
+
+  <!-- AI 营养师悬浮按钮 -->
+  <view class="ai-fab" bindtap="openAiChat">🤖</view>
+</view>
+
+<!-- ===== AI 营养师聊天弹层 ===== -->
+<view wx:if="{{showAiChat}}" class="overlay" bindtap="closeAiChat">
+  <view class="sheet ai-sheet" catchtap="noop">
+    <view class="sheet-handle"></view>
+    <view class="sheet-head">
+      <text class="sheet-title">🤖 AI 营养师</text>
+      <text class="sheet-shut" bindtap="closeAiChat">✕</text>
+    </view>
+    <scroll-view scroll-y class="ai-msgs" scroll-into-view="{{aiScrollTo}}">
+      <view wx:for="{{aiMsgs}}" wx:key="index" id="aim{{index}}" class="ai-row {{item.role==='user'?'ai-row-user':''}}">
+        <view class="ai-bubble {{item.role==='user'?'ai-bubble-user':''}}">{{item.text}}</view>
+      </view>
+    </scroll-view>
+    <view class="ai-chips">
+      <view wx:for="{{aiSuggestions}}" wx:key="index" class="ai-chip" data-q="{{item}}" bindtap="askAi">{{item}}</view>
+    </view>
+    <view class="ai-input-row">
+      <input class="ai-input" placeholder="问我任何饮食问题..." value="{{aiInput}}" bindinput="onAiInput" confirm-type="send" bindconfirm="sendAiMsg" />
+      <button class="ai-send" bindtap="sendAiMsg">发送</button>
+    </view>
+  </view>
+</view>
+
+
+<!-- ===== 底部弹层：选择状态 ===== -->
+<view wx:if="{{showStatusSheet}}" class="overlay" bindtap="closeStatusSheet">
+  <view class="sheet" catchtap="noop">
+    <view class="sheet-handle"></view>
+    <view class="sheet-head">
+      <text class="sheet-title">选择当下状态</text>
+      <text class="sheet-shut" bindtap="closeStatusSheet">✕</text>
+    </view>
+    <view class="status-grid">
+      <view
+        wx:for="{{statusList}}"
+        wx:key="key"
+        class="status-chip {{curStatus===item.key?'active':''}}"
+        data-key="{{item.key}}"
+        bindtap="chooseStatus"
+      >{{item.emoji}} {{item.label}}</view>
+      <view
+        class="status-chip {{curStatus==='custom'?'active':''}}"
+        data-key="custom"
+        bindtap="chooseStatus"
+      >✏️ 自定义</view>
+    </view>
+  </view>
+</view>
+
+
+<!-- ===== 底部弹层：选择时间段 ===== -->
+<view wx:if="{{showDateSheet}}" class="overlay" bindtap="closeDateSheet">
+  <view class="sheet" catchtap="noop">
+    <view class="sheet-handle"></view>
+    <view class="sheet-head">
+      <text class="sheet-title">选择时间段</text>
+      <text class="sheet-shut" bindtap="closeDateSheet">✕</text>
+    </view>
+
+    <!-- 模式切换 -->
+    <view class="mode-switch">
+      <view class="mode-opt {{dateMode==='quick'?'active':''}}" data-mode="quick" bindtap="setMode">快捷选择</view>
+      <view class="mode-opt {{dateMode==='custom'?'active':''}}" data-mode="custom" bindtap="setMode">具体时间</view>
+    </view>
+
+    <!-- 快捷选项 -->
+    <view wx:if="{{dateMode==='quick'}}" class="quick-grid">
+      <view
+        wx:for="{{quickRanges}}"
+        wx:key="key"
+        class="quick-item {{curQuick===item.key?'active':''}}"
+        data-key="{{item.key}}"
+        bindtap="pickQuick"
+      >{{item.label}}</view>
+    </view>
+
+    <!-- 自定义日期 -->
+    <view wx:else class="date-pair">
+      <picker mode="date" value="{{startDate}}" bindchange="onStart">
+        <view class="date-pill">开始 {{startDate}}</view>
+      </picker>
+      <text class="date-tilde">—</text>
+      <picker mode="date" value="{{endDate}}" bindchange="onEnd">
+        <view class="date-pill">结束 {{endDate}}</view>
+      </picker>
+    </view>
+
+    <!-- 弹内预览进度 -->
+    <view class="sheet-prog">
+      <text class="sheet-prog-text">{{progressText}}</text>
+      <view class="track track-sm">
+        <view class="track-bg"></view>
+        <view class="track-fill" style="width:{{progress}}%"></view>
+      </view>
+    </view>
+  </view>
+</view>
+
+
+<!-- ===== 底部弹层：餐食详情 ===== -->
+<view wx:if="{{showMealDetail}}" class="overlay" bindtap="closeMealDetail">
+  <view class="sheet" catchtap="noop">
+    <view class="sheet-handle"></view>
+    <view class="sheet-head">
+      <text class="sheet-title">{{mealDetail.dishName}}</text>
+      <text class="sheet-kcal-badge">约 {{mealDetail.totalKcal}} kcal</text>
+      <text class="sheet-shut" bindtap="closeMealDetail">✕</text>
+    </view>
+
+    <view class="detail-block">
+      <view class="detail-row">
+        <text class="detail-icon">🍽️</text>
+        <view class="detail-body">
+          <text class="detail-k">所属菜系</text>
+          <text class="detail-v">{{mealDetail.cuisine}}</text>
+        </view>
+      </view>
+      <view class="detail-row">
+        <text class="detail-icon">🍚</text>
+        <view class="detail-body">
+          <text class="detail-k">主食</text>
+          <text class="detail-v">{{mealDetail.staple.name}} · {{mealDetail.staple.kcal}} kcal</text>
+        </view>
+      </view>
+      <view class="detail-row">
+        <text class="detail-icon">🥗</text>
+        <view class="detail-body">
+          <text class="detail-k">配菜</text>
+          <text class="detail-v">{{mealDetail.dishesText}}</text>
+        </view>
+      </view>
+      <view wx:if="{{mealDetail.fruit}}" class="detail-row">
+        <text class="detail-icon">🍎</text>
+        <view class="detail-body">
+          <text class="detail-k">水果</text>
+          <text class="detail-v">{{mealDetail.fruit.name}} · {{mealDetail.fruit.kcal}} kcal</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="detail-reason">{{mealDetail.reason}}</view>
+    <view class="detail-note">💡 用餐小贴士：{{mealDetail.note}}</view>
+
+    <!-- 推荐解释打分链 -->
+    <view wx:if="{{mealDetail.explain && mealDetail.explain.length}}" class="explain-box">
+      <view class="explain-title">🧠 为什么推荐这道</view>
+      <view wx:for="{{mealDetail.explain}}" wx:key="index" class="explain-step">
+        <view class="explain-num">{{index+1}}</view>
+        <view class="explain-body">
+          <view class="explain-step-name">{{item.step}}</view>
+          <view class="explain-step-desc">{{item.desc}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>
