@@ -3,7 +3,7 @@
 // 食堂菜单：部分学校有详细数据，其余自动从模板池生成
 // 结构：schools[].name/ campuses[].name/ canteens[].name.menus{breakfast/lunch/dinner}
 
-const SCHOOLS_DATA = require('./schools_data.json');
+const SCHOOLS_DATA = require('./schools_data');
 
 // 有详细食堂菜单的学校（手动维护）
 const DETAILED_SCHOOLS = {
