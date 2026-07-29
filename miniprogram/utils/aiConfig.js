@@ -8,7 +8,7 @@
 // 想关闭真 AI、退回本地规则：把 AI_API_KEY 改成空字符串 '' 即可。
 
 module.exports = {
-  AI_API_KEY: 'sk-y7yhXazEd84SW0tJhporXNupTjqJuFXo1FHfIEbVitfRGs2K',
+  AI_API_KEY: '',
   AI_BASE_URL: 'https://tokenhub.tencentmaas.com/v1',
   AI_MODEL: 'hy3-preview',
   // 思考型模型响应慢，前端超时设长一点
