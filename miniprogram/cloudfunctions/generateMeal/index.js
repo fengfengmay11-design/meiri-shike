@@ -46,23 +46,51 @@ function buildPrompt(status, profile, excludeTitles) {
     '你是私人营养师。用户当前状态：' + label + '。' +
       (pref ? '用户设置：' + pref + '。' : '') +
       (free ? '用户额外说明：' + free + '。' : '') + avoid,
-    '请生成 3 种不同风味的推荐餐，每种包含：1 份主食、1-2 道菜、可选 1 份水果，并估算总能量(kcal)。',
+    '请生成 3 种不同风味的推荐餐，按顺序分别对应早餐、午餐、晚餐。每份包含：1 份主食、1-2 道菜、可选 1 份水果，并估算总能量(kcal)。',
+    '每份餐单必须包含 title、mealType、staple、dishes、totalKcal、reason、note、cuisine。mealType 只能是 breakfast、lunch、dinner，三份依次使用这三个值。',
+    'staple 必须包含非空 name 和数字 kcal；dishes 每项必须包含非空 name 和数字 kcal；有水果时 fruit 必须包含非空 name 和数字 kcal，没有水果时省略 fruit 字段。',
     '严格只输出如下 JSON（不要解释、不要 markdown 代码块）：',
-    '{"meals":[{"title":"风味名","staple":{"name":"主食","kcal":数字},"dishes":[{"name":"菜名","kcal":数字}],"fruit":{"name":"水果","kcal":数字},"totalKcal":数字,"note":"一句建议"}]}',
+    '{"meals":[{"title":"早餐风味名","mealType":"breakfast","staple":{"name":"主食","kcal":数字},"dishes":[{"name":"菜名","kcal":数字}],"fruit":{"name":"水果","kcal":数字},"totalKcal":数字,"reason":"推荐理由","note":"用餐建议","cuisine":"菜系"},{"title":"午餐风味名","mealType":"lunch","staple":{"name":"主食","kcal":数字},"dishes":[{"name":"菜名","kcal":数字}],"totalKcal":数字,"reason":"推荐理由","note":"用餐建议","cuisine":"菜系"},{"title":"晚餐风味名","mealType":"dinner","staple":{"name":"主食","kcal":数字},"dishes":[{"name":"菜名","kcal":数字}],"totalKcal":数字,"reason":"推荐理由","note":"用餐建议","cuisine":"菜系"}]}',
     '注意：必须严格避开用户忌口（含"忌口蔬菜/水果/口味"以及"自由忌口"里的所有内容）；尽量贴合"自由偏好"；减脂/修养状态总能量更低，增肌更高。'
   ].join('\n');
 }
 
 function parseMeals(content) {
   try {
-    let s = content.trim();
+    let s = typeof content === 'string' ? content.trim() : '';
+    if (!s) return [];
     const fence = s.indexOf('```');
     if (fence >= 0) {
       s = s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1);
     }
     const obj = JSON.parse(s);
-    if (obj && Array.isArray(obj.meals)) return obj.meals;
-    if (Array.isArray(obj)) return obj;
+    const meals = obj && Array.isArray(obj.meals) ? obj.meals : (Array.isArray(obj) ? obj : []);
+    const mealTypes = ['breakfast', 'lunch', 'dinner'];
+    if (meals.length !== mealTypes.length) return [];
+    const valid = meals.every(function (meal, index) {
+      return meal && typeof meal === 'object' &&
+        typeof meal.title === 'string' && meal.title.trim() &&
+        meal.mealType === mealTypes[index] &&
+        meal.staple && typeof meal.staple === 'object' &&
+        typeof meal.staple.name === 'string' && meal.staple.name.trim() &&
+        typeof meal.staple.kcal === 'number' && Number.isFinite(meal.staple.kcal) &&
+        Array.isArray(meal.dishes) && meal.dishes.length > 0 &&
+        meal.dishes.every(function (dish) {
+          return dish && typeof dish === 'object' &&
+            typeof dish.name === 'string' && dish.name.trim() &&
+            typeof dish.kcal === 'number' && Number.isFinite(dish.kcal);
+        }) &&
+        (meal.fruit == null || (
+          typeof meal.fruit === 'object' &&
+          typeof meal.fruit.name === 'string' && meal.fruit.name.trim() &&
+          typeof meal.fruit.kcal === 'number' && Number.isFinite(meal.fruit.kcal)
+        )) &&
+        typeof meal.totalKcal === 'number' && Number.isFinite(meal.totalKcal) &&
+        typeof meal.reason === 'string' && meal.reason.trim() &&
+        typeof meal.note === 'string' && meal.note.trim() &&
+        typeof meal.cuisine === 'string' && meal.cuisine.trim();
+    });
+    return valid ? meals : [];
   } catch (e) {
     // 解析失败返回空，前端会回退本地
   }
@@ -70,7 +98,10 @@ function parseMeals(content) {
 }
 
 exports.main = async (event) => {
-  const { status, profile, excludeTitles } = event;
+  event = event || {};
+  const status = event.status;
+  const profile = event.profile && typeof event.profile === 'object' ? event.profile : {};
+  const excludeTitles = Array.isArray(event.excludeTitles) ? event.excludeTitles.slice(0, 3) : [];
   const apiKey = process.env.AI_API_KEY;
   const baseURL = process.env.AI_BASE_URL || 'https://api.hunyuan.cloud.tencent.com/v1';
   const model = process.env.AI_MODEL || 'hunyuan-turbo';
@@ -83,7 +114,7 @@ exports.main = async (event) => {
       {
         model: model,
         temperature: 0.9,
-        messages: [{ role: 'user', content: buildPrompt(status, profile || {}, excludeTitles || []) }]
+        messages: [{ role: 'user', content: buildPrompt(status, profile, excludeTitles) }]
       },
       { headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' }, timeout: 15000 }
     );

@@ -49,7 +49,12 @@ function buildSystemPrompt(status, profile, location) {
 }
 
 exports.main = async (event) => {
-  const { question, status, profile, location, history } = event;
+  event = event || {};
+  const question = typeof event.question === 'string' ? event.question.trim().slice(0, 500) : '';
+  const status = event.status;
+  const profile = event.profile && typeof event.profile === 'object' ? event.profile : {};
+  const location = event.location && typeof event.location === 'object' ? event.location : {};
+  const history = event.history;
   const apiKey = process.env.AI_API_KEY;
   const baseURL = process.env.AI_BASE_URL || 'https://api.hunyuan.cloud.tencent.com/v1';
   const model = process.env.AI_MODEL || 'hunyuan-turbo';
@@ -73,8 +78,9 @@ exports.main = async (event) => {
       { model: model, temperature: 0.7, messages: messages },
       { headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' }, timeout: 15000 }
     );
-    const content = resp.data.choices[0].message.content;
-    return { reply: (content || '').trim() };
+    const content = resp && resp.data && resp.data.choices && resp.data.choices[0] &&
+      resp.data.choices[0].message && resp.data.choices[0].message.content;
+    return { reply: typeof content === 'string' ? content.trim() : '' };
   } catch (e) {
     return { reply: '' };
   }
