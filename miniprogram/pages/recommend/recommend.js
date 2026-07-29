@@ -3,7 +3,8 @@ const storage = require('../../utils/storage.js');
 const mealGenerator = require('../../utils/mealGenerator.js');
 const canteens = require('../../utils/canteens.js');
 const aiNutritionist = require('../../utils/aiNutritionist.js');
-const hunyuan = require('../../utils/hunyuan.js');
+
+const CLOUD_TIMEOUT = 18000;
 
 const QUICK = [
   { key: 'week', label: '近一周', days: 7 },
@@ -19,6 +20,67 @@ function diffDays(a, b) { return Math.round((b - a) / 86400000); }
 
 function todayStr() {
   return fmt(new Date());
+}
+
+function callCloudFunction(name, data) {
+  return new Promise(function (resolve) {
+    var settled = false;
+    var timer;
+
+    function finish(result) {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(result);
+    }
+
+    timer = setTimeout(function () {
+      finish({ ok: false, reason: 'timeout' });
+    }, CLOUD_TIMEOUT);
+
+    if (!wx.cloud || typeof wx.cloud.callFunction !== 'function') {
+      finish({ ok: false, reason: 'unavailable' });
+      return;
+    }
+
+    wx.cloud.callFunction({
+      name: name,
+      data: data,
+      success: function (res) {
+        finish({ ok: true, result: res && res.result });
+      },
+      fail: function () {
+        finish({ ok: false, reason: 'failed' });
+      }
+    });
+  });
+}
+
+function isValidMeals(meals) {
+  var mealTypes = ['breakfast', 'lunch', 'dinner'];
+  return Array.isArray(meals) && meals.length === mealTypes.length && meals.every(function (meal, index) {
+    return meal && typeof meal === 'object' &&
+      typeof meal.title === 'string' && meal.title.trim() &&
+      meal.mealType === mealTypes[index] &&
+      meal.staple && typeof meal.staple === 'object' &&
+      typeof meal.staple.name === 'string' && meal.staple.name.trim() &&
+      typeof meal.staple.kcal === 'number' && Number.isFinite(meal.staple.kcal) &&
+      Array.isArray(meal.dishes) && meal.dishes.length > 0 &&
+      meal.dishes.every(function (dish) {
+        return dish && typeof dish === 'object' &&
+          typeof dish.name === 'string' && dish.name.trim() &&
+          typeof dish.kcal === 'number' && Number.isFinite(dish.kcal);
+      }) &&
+      (meal.fruit == null || (
+        typeof meal.fruit === 'object' &&
+        typeof meal.fruit.name === 'string' && meal.fruit.name.trim() &&
+        typeof meal.fruit.kcal === 'number' && Number.isFinite(meal.fruit.kcal)
+      )) &&
+      typeof meal.totalKcal === 'number' && Number.isFinite(meal.totalKcal) &&
+      typeof meal.reason === 'string' && meal.reason.trim() &&
+      typeof meal.note === 'string' && meal.note.trim() &&
+      typeof meal.cuisine === 'string' && meal.cuisine.trim();
+  });
 }
 
 Page({
@@ -188,20 +250,23 @@ Page({
     var self = this;
     var profile = storage.getProfile();
     var excludeTitles = this.data.meals.map(function (m) { return m.title; });
+    var requestId = (this._mealRequestId || 0) + 1;
+    this._mealRequestId = requestId;
     this.setData({ loading: true });
 
-    if (hunyuan.isEnabled()) {
-      // 路 B：前端直连混元，走真 AI
-      hunyuan.generateMeals(self.data.curStatus, profile, excludeTitles).then(function (meals) {
-        if (meals && meals.length) {
-          self.applyMeals(meals, 'AI 推荐');
-        } else {
-          self.localGenerate(excludeTitles);
-        }
-      });
-    } else {
+    callCloudFunction('generateMeal', {
+      status: self.data.curStatus,
+      profile: profile,
+      excludeTitles: excludeTitles
+    }).then(function (response) {
+      if (self._mealRequestId !== requestId) return;
+      var meals = response.ok && response.result && response.result.meals;
+      if (isValidMeals(meals)) {
+        self.applyMeals(meals, 'AI 推荐');
+        return;
+      }
       self.localGenerate(excludeTitles);
-    }
+    });
   },
 
   localGenerate(excludeTitles) {
@@ -218,6 +283,7 @@ Page({
       m.dishesText = (m.dishes || []).map(function (d) { return d.name + '（' + d.kcal + ' kcal）'; }).join('、');
       if (!m.dishName) { m.dishName = (m.dishes && m.dishes[0] && m.dishes[0].name) || m.title; }
       if (!m.cuisine) { m.cuisine = m.title; }
+      if (!m.flavorKey) { m.flavorKey = m.mealType; }
     });
     this.setData({ meals: meals, loading: false, source: source });
     var rec = storage.getDayRecord(todayStr());
@@ -251,47 +317,51 @@ Page({
   sendAiMsg() {
     var text = (this.data.aiInput || '').trim();
     if (!text) return;
-    var msgs = this.data.aiMsgs.concat([{ role: 'user', text: text }]);
+    var history = this.data.aiMsgs.filter(function (msg) {
+      return !msg.pendingId;
+    }).slice(-6);
+    var pendingId = (this._aiRequestId || 0) + 1;
+    this._aiRequestId = pendingId;
+    var msgs = this.data.aiMsgs.concat([
+      { role: 'user', text: text },
+      { role: 'ai', text: '正在思考…', pendingId: pendingId }
+    ]);
     this.setData({ aiMsgs: msgs, aiInput: '', aiScrollTo: 'aim' + (msgs.length - 1) });
     var self = this;
 
-    // 本地规则兜底回复
+    function replacePending(reply) {
+      var found = false;
+      var next = self.data.aiMsgs.map(function (msg) {
+        if (msg.pendingId !== pendingId) return msg;
+        found = true;
+        return { role: 'ai', text: reply };
+      });
+      if (!found) return;
+      self.setData({ aiMsgs: next, aiScrollTo: 'aim' + (next.length - 1) });
+    }
+
     function localReply() {
-      var reply = aiNutritionist.answer(text, {
+      replacePending(aiNutritionist.answer(text, {
         status: self.data.curStatus,
         profile: storage.getProfile(),
         location: { org: self.data.userOrg, campus: self.data.userCampus }
-      });
-      var msgs2 = self.data.aiMsgs.concat([{ role: 'ai', text: reply }]);
-      self.setData({ aiMsgs: msgs2, aiScrollTo: 'aim' + (msgs2.length - 1) });
+      }));
     }
 
-    var app = getApp();
-    if (hunyuan.isEnabled()) {
-      // 路 B：前端直连混元走真 AI，失败回退本地规则
-      var thinking = self.data.aiMsgs.concat([{ role: 'ai', text: '正在思考…' }]);
-      self.setData({ aiMsgs: thinking, aiScrollTo: 'aim' + (thinking.length - 1) });
-      hunyuan.chat(
-        text,
-        self.data.curStatus,
-        storage.getProfile(),
-        { org: self.data.userOrg, campus: self.data.userCampus },
-        msgs.slice(-6)
-      ).then(function (reply) {
-        if (reply) {
-          // 用真实回复替换「正在思考…」占位
-          var replaced = self.data.aiMsgs.slice(0, -1).concat([{ role: 'ai', text: reply }]);
-          self.setData({ aiMsgs: replaced, aiScrollTo: 'aim' + (replaced.length - 1) });
-        } else {
-          // 云端无有效回复：撤掉占位，走本地规则
-          self.setData({ aiMsgs: self.data.aiMsgs.slice(0, -1) });
-          localReply();
-        }
-      });
-    } else {
-      // 未配置 Key：本地规则引擎，带一点思考延迟
-      setTimeout(localReply, 500);
-    }
+    callCloudFunction('aiChat', {
+      question: text,
+      status: self.data.curStatus,
+      profile: storage.getProfile(),
+      location: { org: self.data.userOrg, campus: self.data.userCampus },
+      history: history
+    }).then(function (response) {
+      var reply = response.ok && response.result && response.result.reply;
+      if (typeof reply === 'string' && reply.trim()) {
+        replacePending(reply.trim());
+        return;
+      }
+      localReply();
+    });
   },
 
   noop() {}
