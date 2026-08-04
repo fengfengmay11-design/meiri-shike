@@ -135,8 +135,11 @@ function generateCanteens(campusName) {
 
 function getCampusCanteens(schoolName, campusName) {
   const detail = DETAILED_SCHOOLS[schoolName];
-  if (detail && detail[campusName]) {
-    return detail[campusName];
+  if (detail) {
+    if (detail[campusName]) return detail[campusName];
+    // 校区名不完全一致时（如“主校区”对应“校本部”），取第一个可用校区
+    const firstKey = Object.keys(detail)[0];
+    if (firstKey) return detail[firstKey];
   }
   return generateCanteens(campusName);
 }
@@ -152,17 +155,69 @@ function findCanteenMenu(schoolName, campusName, canteenName, mealType) {
   return ctn.menus[mealType || 'lunch'] || ctn.menus.lunch || [];
 }
 
-// 周边餐饮（通用）
+// 周边餐饮（多平台比价：取各平台最低价）
 const NEARBY_RESTAURANTS = [
-  { name: '老乡鸡', cuisine: '中式快餐', avgPrice: 25, rating: 4.5, tags: ['经济实惠', '营养均衡'] },
-  { name: '杨国福麻辣烫', cuisine: '麻辣烫', avgPrice: 22, rating: 4.3, tags: ['自选食材', '热乎管饱'] },
-  { name: '沙县小吃', cuisine: '闽菜', avgPrice: 18, rating: 4.2, tags: ['经典平价', '蒸饺炖罐'] },
-  { name: '黄焖鸡米饭', cuisine: '鲁菜', avgPrice: 20, rating: 4.4, tags: ['下饭神器', '一锅出'] },
-  { name: '轻食沙拉店', cuisine: '轻食', avgPrice: 32, rating: 4.6, tags: ['健康低卡', '新鲜食材'] }
+  {
+    name: '老乡鸡', cuisine: '中式快餐', rating: 4.5, tags: ['经济实惠', '营养均衡'],
+    platforms: [
+      { p: '美团', price: 23, time: '30分钟', color: '#FFB400' },
+      { p: '饿了么', price: 25, time: '35分钟', color: '#0085FF' },
+      { p: '小程序', price: 21, time: '到店自取', color: '#07C160' }
+    ]
+  },
+  {
+    name: '杨国福麻辣烫', cuisine: '麻辣烫', rating: 4.3, tags: ['自选食材', '热乎管饱'],
+    platforms: [
+      { p: '美团', price: 21, time: '32分钟', color: '#FFB400' },
+      { p: '饿了么', price: 22, time: '38分钟', color: '#0085FF' },
+      { p: '小程序', price: 19, time: '到店自取', color: '#07C160' }
+    ]
+  },
+  {
+    name: '沙县小吃', cuisine: '闽菜', rating: 4.2, tags: ['经典平价', '蒸饺炖罐'],
+    platforms: [
+      { p: '美团', price: 17, time: '28分钟', color: '#FFB400' },
+      { p: '饿了么', price: 18, time: '30分钟', color: '#0085FF' },
+      { p: '小程序', price: 16, time: '到店自取', color: '#07C160' }
+    ]
+  },
+  {
+    name: '黄焖鸡米饭', cuisine: '鲁菜', rating: 4.4, tags: ['下饭神器', '一锅出'],
+    platforms: [
+      { p: '美团', price: 19, time: '30分钟', color: '#FFB400' },
+      { p: '饿了么', price: 20, time: '33分钟', color: '#0085FF' },
+      { p: '小程序', price: 18, time: '到店自取', color: '#07C160' }
+    ]
+  },
+  {
+    name: '轻食沙拉店', cuisine: '轻食', rating: 4.6, tags: ['健康低卡', '新鲜食材'],
+    platforms: [
+      { p: '美团', price: 30, time: '40分钟', color: '#FFB400' },
+      { p: '饿了么', price: 32, time: '42分钟', color: '#0085FF' },
+      { p: '小程序', price: 29, time: '到店自取', color: '#07C160' }
+    ]
+  }
 ];
+
+// 常见公司（打工人身份选择，用于周边比价与食堂推荐）
+const COMPANIES = [
+  { name: '腾讯', branches: ['滨海大厦', '腾讯大厦', '科兴科学园'] },
+  { name: '字节跳动', branches: ['方恒时尚中心', '中航广场', '后厂村'] },
+  { name: '阿里巴巴', branches: ['西溪园区', '滨江园区'] },
+  { name: '百度', branches: ['百度大厦', '科技园'] },
+  { name: '美团', branches: ['望京总部', '恒电大厦'] },
+  { name: '小米', branches: ['小米科技园', '清河总部'] },
+  { name: '华为', branches: ['坂田基地', '松山湖'] },
+  { name: '京东', branches: ['亦庄总部', '京东大厦'] }
+];
+
+function getCompaniesList() {
+  return COMPANIES;
+}
 
 module.exports = {
   getSchoolsList,
+  getCompaniesList,
   getCampusCanteens,
   findCanteenMenu,
   NEARBY_RESTAURANTS

@@ -85,7 +85,7 @@ module.exports.contains = function (arr, v) {
           data-field="{{sheetKey}}"
           maxlength="200"
         ></textarea>
-        <view class="voice-btn {{recording ? 'recording' : ''}}" bindtap="startVoiceInput" catchtap="startVoiceInput">
+        <view class="voice-btn {{recording ? 'recording' : ''}}" catchtap="startVoiceInput">
           <text class="voice-icon">{{recording ? '⏹' : '🎤'}}</text>
         </view>
       </view>

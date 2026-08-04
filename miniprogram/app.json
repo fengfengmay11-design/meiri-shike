@@ -6,7 +6,7 @@
   ],
   "window": {
     "navigationBarBackgroundColor": "#ffffff",
-    "navigationBarTitleText": "今天吃什么",
+    "navigationBarTitleText": "每日时刻",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#f5f6f8",
     "enablePullDownRefresh": false

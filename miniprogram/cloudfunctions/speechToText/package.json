@@ -1,1 +1,11 @@
-{"name": "speechToText", "version": "1.0.0", "description": "语音转文字：接收录音文件ID，返回识别文本", "main": "index.js", "dependencies": {"tencentcloud-sdk-nodejs": "^4.0.0"}}
+{
+  "name": "speech-to-text",
+  "version": "1.0.0",
+  "private": true,
+  "description": "使用腾讯云一句话识别将临时录音转换为文字",
+  "main": "index.js",
+  "dependencies": {
+    "tencentcloud-sdk-nodejs-asr": "^4.1.273",
+    "wx-server-sdk": "4.0.2"
+  }
+}

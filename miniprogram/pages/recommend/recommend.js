@@ -94,14 +94,20 @@ Page({
     // 位置选择
     showLocSheet: false,
     userIdentity: 'student',
-    locStep: 'school', // 'school' | 'campus' | 'canteen'
+    locStep: 'org', // 'org' | 'campus'
     userOrg: '',
     userCampus: '',
     locationLabel: '',
     schoolSearch: '',
-    filteredSchools: [],
+    locIdentity: 'student', // 弹层内临时选择
+    locOrg: '',
+    locCampus: '',
+    orgList: [],
+    orgTotal: 0,
     campusList: [],
-    canteenList: [],
+
+    // 周边比价
+    nearbyList: [],
 
     showDateSheet: false,
     dateMode: 'quick',
@@ -141,9 +147,10 @@ Page({
     const locLabel = curOrg ? (curIdentity==='student'?'🎓':'💼')+' '+curOrg+(curCampus?' · '+curCampus:'') : '点击设置';
     const now = new Date();
     const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
-    // 加载全国高校列表
+    // 加载全国高校列表与公司列表
     const allSchools = canteens.getSchoolsList();
     this.allSchools = allSchools;
+    this.allCompanies = canteens.getCompaniesList();
     this.setData({
       statusList: statusList,
       curStatus: curStatus,
@@ -153,11 +160,130 @@ Page({
       userOrg: curOrg,
       userCampus: curCampus,
       locationLabel: locLabel,
-      filteredSchools: allSchools,
       startDate: fmt(weekAgo),
       endDate: fmt(now)
     });
     this.computeProgress();
+    this.buildNearby();
+  },
+
+  /* ===== 就餐位置 ===== */
+  openLocSheet() {
+    this.setData({
+      showLocSheet: true,
+      locIdentity: this.data.userIdentity || 'student',
+      locOrg: '',
+      locCampus: '',
+      locStep: 'org',
+      schoolSearch: ''
+    });
+    this.refreshOrgList();
+  },
+  closeLocSheet() { this.setData({ showLocSheet: false }); },
+
+  pickIdentity(e) {
+    const id = e.currentTarget.dataset.id;
+    if (id === this.data.locIdentity) return;
+    this.setData({ locIdentity: id, locOrg: '', locCampus: '', locStep: 'org', schoolSearch: '' });
+    this.refreshOrgList();
+  },
+
+  onSchoolSearch(e) {
+    this.setData({ schoolSearch: e.detail.value });
+    this.refreshOrgList();
+  },
+
+  // 机构列表（学校/公司），搜索时最多展示 50 条避免卡顿
+  refreshOrgList() {
+    const isStudent = this.data.locIdentity === 'student';
+    const src = isStudent ? (this.allSchools || []) : (this.allCompanies || []);
+    const f = (this.data.schoolSearch || '').trim();
+    const matched = [];
+    for (let i = 0; i < src.length; i++) {
+      const o = src[i];
+      const name = o.name;
+      if (!name) continue;
+      if (f && name.indexOf(f) < 0) continue;
+      const sub = isStudent
+        ? (o.campuses && o.campuses.length > 1 ? o.campuses.length + ' 个校区' : '')
+        : (o.branches ? o.branches.length + ' 个分部' : '');
+      matched.push({ name: name, sub: sub });
+      if (matched.length >= 50) break;
+    }
+    this.setData({ orgList: matched, orgTotal: src.length });
+  },
+
+  pickOrg(e) {
+    const name = e.currentTarget.dataset.name;
+    const isStudent = this.data.locIdentity === 'student';
+    let campuses = [];
+    if (isStudent) {
+      const s = (this.allSchools || []).find(function (o) { return o.name === name; });
+      campuses = s && s.campuses && s.campuses.length ? s.campuses : ['主校区'];
+    } else {
+      const c = (this.allCompanies || []).find(function (o) { return o.name === name; });
+      campuses = c && c.branches ? c.branches : ['总部'];
+    }
+    this.setData({ locOrg: name, locCampus: '', campusList: campuses, locStep: 'campus' });
+  },
+
+  backToOrgs() {
+    this.setData({ locOrg: '', locCampus: '', locStep: 'org' });
+    this.refreshOrgList();
+  },
+
+  pickCampus(e) {
+    this.setData({ locCampus: e.currentTarget.dataset.name });
+  },
+
+  confirmLocation() {
+    const d = this.data;
+    if (!d.locIdentity || !d.locOrg || !d.locCampus) return;
+    storage.setLocation('identity', d.locIdentity);
+    storage.setLocation('org', d.locOrg);
+    storage.setLocation('campus', d.locCampus);
+    const label = (d.locIdentity === 'student' ? '🎓' : '💼') + ' ' + d.locOrg + (d.locCampus ? ' · ' + d.locCampus : '');
+    this.setData({
+      userIdentity: d.locIdentity,
+      userOrg: d.locOrg,
+      userCampus: d.locCampus,
+      locationLabel: label,
+      showLocSheet: false
+    });
+    this.buildNearby();
+    this.generateMeals();
+  },
+
+  /* ===== 周边比价 ===== */
+  buildNearby() {
+    if (!this.data.userOrg) {
+      this.setData({ nearbyList: [] });
+      return;
+    }
+    const list = canteens.NEARBY_RESTAURANTS.map(function (r) {
+      let best = r.platforms[0];
+      r.platforms.forEach(function (p) { if (p.price < best.price) best = p; });
+      return {
+        name: r.name, cuisine: r.cuisine, rating: r.rating, tags: r.tags,
+        platforms: r.platforms.map(function (p) {
+          return { p: p.p, price: p.price, time: p.time, color: p.color, isBest: p.p === best.p };
+        }),
+        bestPrice: best.price, bestPlatform: best.p
+      };
+    });
+    this.setData({ nearbyList: list });
+  },
+
+  // 小程序内无法直接跳外卖 App，复制店名引导用户去对应平台搜索
+  onPlatformTap(e) {
+    const name = e.currentTarget.dataset.name;
+    const platform = e.currentTarget.dataset.platform;
+    wx.setClipboardData({
+      data: name,
+      success: function () {
+        wx.showToast({ title: '已复制店名，去' + platform + '粘贴搜索', icon: 'none', duration: 2500 });
+      }
+    });
   },
 
   /* ===== 近期状态 ===== */
@@ -257,6 +383,7 @@ Page({
     callCloudFunction('generateMeal', {
       status: self.data.curStatus,
       profile: profile,
+      location: { org: self.data.userOrg, campus: self.data.userCampus },
       excludeTitles: excludeTitles
     }).then(function (response) {
       if (self._mealRequestId !== requestId) return;
@@ -279,6 +406,24 @@ Page({
   },
 
   applyMeals(meals, source) {
+    var self = this;
+    // 已选学校/公司时，从对应食堂菜单注入真实菜品来源
+    if (this.data.userOrg && this.data.userCampus) {
+      var ctns = canteens.getCampusCanteens(this.data.userOrg, this.data.userCampus);
+      meals.forEach(function (m, i) {
+        var ct = ctns[i % ctns.length];
+        if (ct && ct.menus) {
+          var menu = ct.menus[m.mealType] || ct.menus.lunch || [];
+          if (menu.length) {
+            var dish = menu[Math.floor(Math.random() * menu.length)];
+            m.canteenSource = self.data.userOrg + ' · ' + self.data.userCampus + ' · ' + ct.name;
+            m.dishName = dish;
+            m.reason = '📍 来自 ' + m.canteenSource + ' 今日菜单';
+          }
+        }
+      });
+      source = source + ' · ' + this.data.userOrg + '食堂';
+    }
     meals.forEach(function (m) {
       m.dishesText = (m.dishes || []).map(function (d) { return d.name + '（' + d.kcal + ' kcal）'; }).join('、');
       if (!m.dishName) { m.dishName = (m.dishes && m.dishes[0] && m.dishes[0].name) || m.title; }

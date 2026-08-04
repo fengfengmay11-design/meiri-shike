@@ -1,8 +1,8 @@
-# 食刻 · 智能选餐助手
+# 每日时刻 · 智能选餐助手
 
 > 解决「今天吃什么」这个世纪难题——基于身心状态的个性化三餐推荐，覆盖推荐引擎、健康管理、食堂对接、多平台比价的完整产品闭环。
 
-[![Demo](https://img.shields.io/badge/Demo-在线体验-FF6B35)](https://你的用户名.github.io/shike/)
+[![Demo](https://img.shields.io/badge/Demo-在线体验-FF6B35)](https://你的用户名.github.io/meiri-shike/)
 [![WeChat MiniProgram](https://img.shields.io/badge/微信小程序-工程完整-07C160)](./miniprogram/)
 [![Vibe Coding](https://img.shields.io/badge/开发方式-Vibe%20Coding-blueviolet)](#-开发方式vibe-coding)
 
@@ -96,7 +96,7 @@
 ## 项目结构
 
 ```
-shike/
+meiri-shike/
 ├── index.html              # 单文件网页版（GitHub Pages 托管）
 ├── miniprogram/            # 微信小程序完整工程
 │   ├── pages/              # 推荐/健康/我的 三个页面
