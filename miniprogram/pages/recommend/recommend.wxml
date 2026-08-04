@@ -10,6 +10,15 @@
     </view>
   </view>
 
+  <!-- 就餐位置 -->
+  <view class="card loc-card" bindtap="openLocSheet">
+    <view class="field-row">
+      <text class="field-label">就餐位置</text>
+      <text class="field-value">{{locationLabel || '未设置'}}</text>
+      <text class="field-arrow">›</text>
+    </view>
+  </view>
+
   <!-- 时间段 + 完成度（同一水平） -->
   <view class="prog-card">
     <view class="prog-line">
@@ -59,6 +68,34 @@
 
   <!-- AI 营养师悬浮按钮 -->
   <view class="ai-fab" bindtap="openAiChat">🤖</view>
+
+  <!-- 周边比价 -->
+  <view wx:if="{{nearbyList.length}}" class="nearby-block">
+    <view class="nearby-head">
+      <text class="nearby-title">📊 {{userOrg}} 周边比价</text>
+      <text class="nearby-tip">点平台复店名去搜</text>
+    </view>
+    <view wx:for="{{nearbyList}}" wx:key="name" class="nearby-item">
+      <view class="nearby-top">
+        <text class="nearby-name">{{item.name}}</text>
+        <text class="nearby-cuisine">{{item.cuisine}}</text>
+        <text class="nearby-rating">★ {{item.rating}}</text>
+      </view>
+      <view class="nearby-tags">
+        <text wx:for="{{item.tags}}" wx:for-item="t" wx:key="*this" class="nearby-tag">{{t}}</text>
+      </view>
+      <view class="nearby-platforms">
+        <view wx:for="{{item.platforms}}" wx:for-item="p" wx:key="p"
+              class="nearby-platform {{p.isBest?'best':''}}"
+              data-name="{{item.name}}" data-platform="{{p.p}}" bindtap="onPlatformTap">
+          <text class="np-name">{{p.p}}</text>
+          <text class="np-price">¥{{p.price}}</text>
+          <text wx:if="{{p.isBest}}" class="np-best">最低</text>
+          <text class="np-time">{{p.time}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
 </view>
 
 <!-- ===== AI 营养师聊天弹层 ===== -->
@@ -156,6 +193,52 @@
         <view class="track-fill" style="width:{{progress}}%"></view>
       </view>
     </view>
+  </view>
+</view>
+
+
+<!-- ===== 底部弹层：选择就餐位置 ===== -->
+<view wx:if="{{showLocSheet}}" class="overlay" bindtap="closeLocSheet">
+  <view class="sheet loc-sheet" catchtap="noop">
+    <view class="sheet-handle"></view>
+    <view class="sheet-head">
+      <text class="sheet-title">设置就餐位置</text>
+      <text class="sheet-shut" bindtap="closeLocSheet">✕</text>
+    </view>
+
+    <!-- 身份切换 -->
+    <view class="mode-switch">
+      <view class="mode-opt {{locIdentity==='student'?'active':''}}" data-id="student" bindtap="pickIdentity">🎓 学生</view>
+      <view class="mode-opt {{locIdentity==='worker'?'active':''}}" data-id="worker" bindtap="pickIdentity">💼 打工人</view>
+    </view>
+
+    <!-- 步骤：选机构 -->
+    <block wx:if="{{locStep==='org'}}">
+      <view class="loc-search">
+        <input class="loc-search-input" placeholder="{{locIdentity==='student'?'搜索学校名称':'搜索公司名称'}}" value="{{schoolSearch}}" bindinput="onSchoolSearch" />
+      </view>
+      <scroll-view scroll-y class="loc-list">
+        <view wx:for="{{orgList}}" wx:key="name" class="loc-list-item" data-name="{{item.name}}" bindtap="pickOrg">
+          <view class="loc-list-main">
+            <text class="loc-list-name">{{item.name}}</text>
+            <text wx:if="{{item.sub}}" class="loc-list-sub">{{item.sub}}</text>
+          </view>
+          <text class="loc-list-arrow">›</text>
+        </view>
+        <view wx:if="{{!orgList.length}}" class="loc-empty">没有匹配结果</view>
+      </scroll-view>
+      <view class="loc-total">共 {{orgTotal}} 所{{locIdentity==='student'?'高校':'公司'}}{{orgList.length<orgTotal?'（已显示前 '+orgList.length+' 条）':''}}</view>
+    </block>
+
+    <!-- 步骤：选校区/分部 -->
+    <block wx:else>
+      <view class="loc-back" bindtap="backToOrgs">‹ 返回选择{{locIdentity==='student'?'学校':'公司'}}</view>
+      <view class="loc-title">选择{{locIdentity==='student'?'校区':'分部'}}（{{locOrg}}）</view>
+      <view class="loc-chips">
+        <view wx:for="{{campusList}}" wx:key="*this" class="loc-chip {{locCampus===item?'active':''}}" data-name="{{item}}" bindtap="pickCampus">{{item}}</view>
+      </view>
+      <view class="loc-confirm" bindtap="confirmLocation">确认：{{locOrg}}{{locCampus?' · '+locCampus:''}}</view>
+    </block>
   </view>
 </view>
 

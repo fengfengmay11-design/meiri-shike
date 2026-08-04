@@ -52,16 +52,55 @@ Page({
     if (!this.recorderManager) {
       this.recorderManager = wx.getRecorderManager();
       var self = this;
-      this.recorderManager.onStop(function (res) {
-        self.setData({ recording: false });
-        self.speechToText(res.tempFilePath);
+      this.recorderManager.onStart(function () {
+        if (self._voicePhase !== 'starting') {
+          self._recordingActive = true;
+          self._ignoreNextRecorderStop = true;
+          self.stopRecordingOnce();
+          return;
+        }
+        self._recordingActive = true;
+        self._stopRequested = false;
+        self.setVoiceBusy('recording');
+        self.setData({
+          recording: self._voiceTarget === 'sheet',
+          nlRecording: self._voiceTarget === 'nl'
+        });
+        self.startRecordTimer();
       });
-      this.recorderManager.onError(function (err) {
-        self.setData({ recording: false });
-        console.error('录音出错:', err);
-        wx.showToast({ title: '录音失败，请重试', icon: 'none' });
+      this.recorderManager.onStop(function (res) {
+        self._recordingActive = false;
+        self._stopRequested = false;
+        self.clearRecordTimer();
+        self.setData({ recording: false, nlRecording: false });
+        if (self._ignoreNextRecorderStop) {
+          self._ignoreNextRecorderStop = false;
+          self.resetVoiceUi();
+          return;
+        }
+        if (res && res.tempFilePath) {
+          self.setVoiceBusy('uploading');
+          self.speechToText(res.tempFilePath, self._activeVoiceRequestId);
+        } else {
+          self.finishVoiceFailure('录音失败，请使用文字输入');
+        }
+      });
+      this.recorderManager.onError(function () {
+        self._recordingActive = false;
+        self._stopRequested = false;
+        self._activeVoiceRequestId = (self._activeVoiceRequestId || 0) + 1;
+        self.clearRecordTimer();
+        self.finishVoiceFailure('录音失败，请使用文字输入');
       });
     }
+  },
+
+  onHide() {
+    this.cancelVoiceWork();
+  },
+
+  onUnload() {
+    this.cancelVoiceWork();
   },
 
   refreshSummaries() {
@@ -120,76 +159,293 @@ Page({
 
   // ====== 语音输入 ======
   startVoiceInput() {
-    var self = this;
-    this._voiceTarget = 'sheet'; // 识别结果进偏好/忌口自由填写框
-    if (this.data.recording) {
-      // 正在录音 → 停止
-      this.recorderManager.stop();
+    this.requestVoiceInput('sheet');
+  },
+
+  startNlVoice() {
+    this.requestVoiceInput('nl');
+  },
+
+  requestVoiceInput(target) {
+    if (this._voiceBusy) {
+      if (this._voicePhase === 'recording' && this._recordingActive) {
+        this.stopRecordingOnce();
+      } else if (this._voicePhase === 'uploading' || this._voicePhase === 'recognizing') {
+        wx.showToast({ title: '语音识别处理中', icon: 'none' });
+      }
       return;
     }
 
-    // 开始录音
-    this.setData({ recording: true });
-    wx.showLoading({ title: '正在聆听…', mask: true });
-
-    this.recorderManager.start({
-      duration: 15000,       // 最长录15秒
-      sampleRate: 16000,
-      numberOfChannels: 1,
-      format: 'mp3'
-    });
-
-    // 15秒自动停止
-    setTimeout(function () {
-      if (self.data.recording) {
-        self.recorderManager.stop();
-        wx.hideLoading();
+    var self = this;
+    const requestId = (this._activeVoiceRequestId || 0) + 1;
+    this._activeVoiceRequestId = requestId;
+    this.setVoiceBusy('preparing');
+    this.hideVoiceLoading();
+    this.setData({ recording: false, nlRecording: false });
+    wx.getSetting({
+      success: function (settings) {
+        if (!self.isCurrentVoiceRequest(requestId, 'preparing')) return;
+        const authSetting = settings.authSetting || {};
+        const recordSetting = authSetting['scope.record'];
+        if (recordSetting === true) {
+          self.beginRecording(target, requestId);
+        } else if (recordSetting === false) {
+          self.showRecordPermissionGuide();
+        } else {
+          wx.authorize({
+            scope: 'scope.record',
+            success: function () {
+              if (self.isCurrentVoiceRequest(requestId, 'preparing')) {
+                self.beginRecording(target, requestId);
+              }
+            },
+            fail: function () {
+              if (self.isCurrentVoiceRequest(requestId, 'preparing')) {
+                self.showRecordPermissionGuide();
+              }
+            }
+          });
+        }
+      },
+      fail: function () {
+        if (self.isCurrentVoiceRequest(requestId, 'preparing')) {
+          self.finishVoiceFailure('无法检查麦克风权限，请使用文字输入');
+        }
       }
+    });
+  },
+
+  showRecordPermissionGuide() {
+    var self = this;
+    this.resetVoiceUi();
+    wx.showModal({
+      title: '需要麦克风权限',
+      content: '语音输入需要麦克风权限；你也可以继续使用文字输入。',
+      confirmText: '去设置',
+      cancelText: '文字输入',
+      success: function (result) {
+        if (!result.confirm) return;
+        wx.openSetting({
+          fail: function () {
+            self.finishVoiceFailure('未能打开设置，请使用文字输入');
+          }
+        });
+      }
+    });
+  },
+
+  beginRecording(target, requestId) {
+    if (!this.isCurrentVoiceRequest(requestId, 'preparing')) return;
+    this._voiceTarget = target;
+    this._recordingActive = false;
+    this._stopRequested = false;
+    this.setVoiceBusy('starting');
+
+    try {
+      this.recorderManager.start({
+        duration: 15000,
+        sampleRate: 16000,
+        numberOfChannels: 1,
+        format: 'mp3'
+      });
+    } catch (error) {
+      this._recordingActive = false;
+      this._stopRequested = false;
+      this.finishVoiceFailure('录音启动失败，请使用文字输入');
+    }
+  },
+
+  startRecordTimer() {
+    var self = this;
+    this.clearRecordTimer();
+    this._recordStopTimer = setTimeout(function () {
+      self.stopRecordingOnce();
     }, 15000);
   },
 
-  // 语音转文字（调云函数）
-  speechToText(tempFilePath) {
-    var self = this;
+  stopRecordingOnce() {
+    if (!this._recordingActive || this._stopRequested) return;
+    this._stopRequested = true;
+    this.clearRecordTimer();
+    try {
+      this.recorderManager.stop();
+    } catch (error) {
+      this._recordingActive = false;
+      this._stopRequested = false;
+      this.finishVoiceFailure('录音停止失败，请使用文字输入');
+    }
+  },
 
+  clearRecordTimer() {
+    if (this._recordStopTimer) {
+      clearTimeout(this._recordStopTimer);
+      this._recordStopTimer = null;
+    }
+  },
+
+  setVoiceBusy(phase) {
+    this._voiceBusy = Boolean(phase);
+    this._voicePhase = phase || '';
+  },
+
+  isCurrentVoiceRequest(requestId, phase) {
+    return requestId === this._activeVoiceRequestId
+      && this._voiceBusy
+      && (!phase || this._voicePhase === phase);
+  },
+
+  showVoiceLoading(title) {
+    if (this._loadingVisible) return;
+    this._loadingVisible = true;
+    wx.showLoading({ title: title, mask: true });
+  },
+
+  hideVoiceLoading() {
+    if (!this._loadingVisible) return;
+    this._loadingVisible = false;
     wx.hideLoading();
+  },
 
-    // 上传录音文件到云存储，再调用语音识别云函数
-    wx.cloud.uploadFile({
-      cloudPath: 'voice/' + Date.now() + '.mp3',
-      filePath: tempFilePath,
-      success: function (uploadRes) {
-        wx.cloud.callFunction({
-          name: 'speechToText',
-          data: { fileID: uploadRes.fileID },
-          success: function (res) {
-            var text = '';
-            if (res.result && res.result.text) {
-              text = res.result.text.trim();
-            }
-            if (text) {
-              self.appendVoiceText(text);
-            } else {
-              wx.showToast({ title: '未识别到内容，请重试', icon: 'none' });
-            }
-          },
-          fail: function () {
-            // 云函数不存在时，提示用户使用文字输入
-            wx.showToast({ title: '语音功能需部署 speechToText 云函数', icon: 'none', duration: 2500 });
-          }
+  resetVoiceUi() {
+    this.setVoiceBusy('');
+    this.hideVoiceLoading();
+    this.setData({ recording: false, nlRecording: false });
+  },
+
+  finishVoiceFailure(message) {
+    this.resetVoiceUi();
+    wx.showToast({ title: message, icon: 'none', duration: 2500 });
+  },
+
+  cancelVoiceWork() {
+    this._activeVoiceRequestId = (this._activeVoiceRequestId || 0) + 1;
+    this.clearRecordTimer();
+    if (this._recordingActive && this.recorderManager) {
+      this._ignoreNextRecorderStop = true;
+      this.stopRecordingOnce();
+    }
+    this.resetVoiceUi();
+  },
+
+  runWxOperation(startOperation, timeoutMs, onLateSuccess) {
+    return new Promise(function (resolve) {
+      let settled = false;
+      const timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        resolve({ ok: false, timeout: true });
+      }, timeoutMs);
+
+      function finish(result) {
+        if (settled) {
+          if (result.ok && onLateSuccess) onLateSuccess(result.value);
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      }
+
+      try {
+        startOperation({
+          success: function (value) { finish({ ok: true, value: value }); },
+          fail: function () { finish({ ok: false, timeout: false }); }
         });
-      },
-      fail: function () {
-        wx.showToast({ title: '上传失败，请检查网络', icon: 'none' });
+      } catch (error) {
+        finish({ ok: false, timeout: false });
       }
     });
+  },
+
+  cleanupCloudRecording(fileID) {
+    if (!fileID) return;
+    try {
+      wx.cloud.deleteFile({
+        fileList: [fileID],
+        fail: function () {
+          console.error('voice: temporary recording cleanup failed');
+        }
+      });
+    } catch (error) {
+      console.error('voice: temporary recording cleanup failed');
+    }
+  },
+
+  createVoiceCloudPath() {
+    const randomPart = Math.random().toString(36).slice(2, 12);
+    const sequence = (this._voiceFileSequence || 0) + 1;
+    this._voiceFileSequence = sequence;
+    return 'voice/' + Date.now().toString(36) + '-' + randomPart + '-' + sequence + '.mp3';
+  },
+
+  // 上传临时录音并调用云函数；超时后的迟到回调只参与清理，不回写输入。
+  async speechToText(tempFilePath, requestId) {
+    var self = this;
+    let completed = false;
+
+    function complete(text, message) {
+      if (completed || requestId !== self._activeVoiceRequestId) return;
+      completed = true;
+      self.resetVoiceUi();
+      if (text) {
+        self.appendVoiceText(text);
+      } else {
+        self.finishVoiceFailure(message);
+      }
+    }
+
+    this.showVoiceLoading('正在识别…');
+    const upload = await this.runWxOperation(function (callbacks) {
+      wx.cloud.uploadFile({
+        cloudPath: self.createVoiceCloudPath(),
+        filePath: tempFilePath,
+        success: callbacks.success,
+        fail: callbacks.fail
+      });
+    }, 10000, function (lateResult) {
+      self.cleanupCloudRecording(lateResult && lateResult.fileID);
+    });
+
+    if (!upload.ok || !upload.value || !upload.value.fileID) {
+      complete('', upload.timeout ? '上传超时，请使用文字输入' : '上传失败，请使用文字输入');
+      return;
+    }
+
+    const fileID = upload.value.fileID;
+    if (requestId !== this._activeVoiceRequestId) {
+      this.cleanupCloudRecording(fileID);
+      return;
+    }
+
+    this.setVoiceBusy('recognizing');
+    const recognition = await this.runWxOperation(function (callbacks) {
+      wx.cloud.callFunction({
+          name: 'speechToText',
+          data: { fileID: fileID },
+          success: callbacks.success,
+          fail: callbacks.fail
+      });
+    }, 20000);
+
+    if (!recognition.ok) {
+      this.cleanupCloudRecording(fileID);
+      complete('', recognition.timeout ? '识别超时，请使用文字输入' : '语音识别失败，请使用文字输入');
+      return;
+    }
+
+    const result = recognition.value && recognition.value.result;
+    const text = result && typeof result.text === 'string' ? result.text.trim() : '';
+    if (!text) {
+      complete('', '未识别到内容，请使用文字输入');
+      return;
+    }
+    complete(text, '');
   },
 
   // 将识别结果追加到当前输入框
   appendVoiceText(text) {
-    // 智能识别卡片模式：识别结果进 nlText
     if (this._voiceTarget === 'nl') {
-      this.setData({ nlText: (this.data.nlText ? this.data.nlText + '，' : '') + text, nlRecording: false });
+      this.setData({ nlText: (this.data.nlText ? this.data.nlText + '，' : '') + text });
       wx.showToast({ title: '识别成功 ✓', icon: 'success' });
       return;
     }
@@ -202,34 +458,9 @@ Page({
     wx.showToast({ title: '识别成功 ✓', icon: 'success' });
   },
 
-  /* ===== 智能识别：AI 分析 ===== */
+  /* ===== 智能识别：本地规则分析 ===== */
   onNlInput(e) {
     this.setData({ nlText: e.detail.value });
-  },
-
-  startNlVoice() {
-    var self = this;
-    if (this.data.nlRecording) {
-      this.recorderManager.stop();
-      this.setData({ nlRecording: false });
-      return;
-    }
-    this._voiceTarget = 'nl'; // 识别结果进智能识别框
-    this.setData({ nlRecording: true });
-    wx.showLoading({ title: '正在聆听…', mask: true });
-    this.recorderManager.start({
-      duration: 15000,
-      sampleRate: 16000,
-      numberOfChannels: 1,
-      format: 'mp3'
-    });
-    setTimeout(function () {
-      if (self.data.nlRecording) {
-        self.recorderManager.stop();
-        self.setData({ nlRecording: false });
-        wx.hideLoading();
-      }
-    }, 15000);
   },
 
   analyzeNl() {

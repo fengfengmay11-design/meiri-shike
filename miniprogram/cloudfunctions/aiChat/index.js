@@ -37,7 +37,7 @@ function buildSystemPrompt(status, profile, location) {
     : '';
 
   return [
-    '你是「食刻」小程序里的 AI 营养师，语气亲切、专业、简洁。',
+    '你是「每日时刻」小程序里的 AI 营养师，语气亲切、专业、简洁。',
     '用户当前身心状态：' + label + '。' + (parts ? '用户设置：' + parts + '。' : '') + loc,
     '回答要求：',
     '1. 只回答饮食、营养、健康相关的问题；无关问题礼貌地把话题引回饮食。',

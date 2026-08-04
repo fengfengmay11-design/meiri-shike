@@ -572,3 +572,123 @@
   color: #777;
   line-height: 1.4;
 }
+
+/* ===== 就餐位置弹层 ===== */
+.loc-search {
+  padding: 0 8rpx 16rpx;
+}
+.loc-search-input {
+  width: 100%;
+  height: 72rpx;
+  background: #F4F5F7;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+.loc-list {
+  max-height: 560rpx;
+  margin: 0 -8rpx;
+}
+.loc-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22rpx 16rpx;
+  border-bottom: 1rpx solid #F0F0F0;
+}
+.loc-list-main { display: flex; flex-direction: column; }
+.loc-list-name { font-size: 28rpx; color: #1E1E1E; }
+.loc-list-sub { font-size: 22rpx; color: #999; margin-top: 4rpx; }
+.loc-list-arrow { font-size: 32rpx; color: #BBB; }
+.loc-empty { text-align: center; color: #999; font-size: 26rpx; padding: 40rpx 0; }
+.loc-total { font-size: 22rpx; color: #999; text-align: center; padding: 14rpx 0 4rpx; }
+.loc-back {
+  font-size: 26rpx;
+  color: #FF7A45;
+  padding: 8rpx 0 18rpx;
+}
+.loc-title { font-size: 26rpx; color: #555; margin-bottom: 18rpx; }
+.loc-chips { display: flex; flex-wrap: wrap; gap: 18rpx; margin-bottom: 28rpx; }
+.loc-chip {
+  padding: 16rpx 30rpx;
+  background: #F4F5F7;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #333;
+  border: 2rpx solid transparent;
+}
+.loc-chip.active {
+  background: #FFF1E8;
+  border-color: #FF7A45;
+  color: #FF7A45;
+  font-weight: 700;
+}
+.loc-confirm {
+  text-align: center;
+  padding: 26rpx;
+  background: linear-gradient(90deg, #FF9A5A, #FF7A45);
+  color: #fff;
+  border-radius: 18rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+/* ===== 周边比价 ===== */
+.nearby-block {
+  margin-top: 28rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  box-shadow: 0 6rpx 20rpx rgba(0,0,0,0.04);
+}
+.nearby-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+}
+.nearby-title { font-size: 28rpx; font-weight: 700; color: #1E1E1E; }
+.nearby-tip { font-size: 20rpx; color: #AAA; }
+.nearby-item {
+  border: 1rpx solid #F0F0F0;
+  border-radius: 18rpx;
+  padding: 18rpx 20rpx;
+  margin-bottom: 16rpx;
+}
+.nearby-top {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 10rpx;
+}
+.nearby-name { font-size: 28rpx; font-weight: 700; color: #1E1E1E; }
+.nearby-cuisine { font-size: 22rpx; color: #888; }
+.nearby-rating { font-size: 22rpx; color: #FF9A2E; margin-left: auto; }
+.nearby-tags { display: flex; flex-wrap: wrap; gap: 10rpx; margin-bottom: 14rpx; }
+.nearby-tag {
+  font-size: 20rpx;
+  color: #6B7CFF;
+  background: #EEF0FF;
+  border-radius: 8rpx;
+  padding: 4rpx 12rpx;
+}
+.nearby-platforms { display: flex; gap: 12rpx; }
+.nearby-platform {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14rpx 8rpx;
+  border-radius: 14rpx;
+  background: #F7F8FA;
+  border: 2rpx solid transparent;
+}
+.nearby-platform.best {
+  background: #FFF7ED;
+  border-color: #FFB070;
+}
+.np-name { font-size: 22rpx; color: #444; }
+.np-price { font-size: 30rpx; font-weight: 700; color: #FF7A45; margin-top: 6rpx; }
+.np-best { font-size: 18rpx; color: #fff; background: #FF7A45; border-radius: 6rpx; padding: 1rpx 8rpx; margin-top: 4rpx; }
+.np-time { font-size: 18rpx; color: #AAA; margin-top: 4rpx; }
