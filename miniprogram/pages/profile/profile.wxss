@@ -95,6 +95,28 @@
   color: #fff;
   font-weight: 600;
 }
+/* 动态 chip（语音/自由填写生成的非预设标签，如"陕菜"） */
+.chip-dynamic {
+  background: linear-gradient(135deg, #FFF3E0, #FFE0B2) !important;
+  color: #E65100 !important;
+  border: 4rpx dashed #FF9800 !important;
+  position: relative;
+  padding-right: 56rpx !important;
+}
+.chip-remove {
+  position: absolute;
+  right: 12rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.15);
+  color: #fff;
+  font-size: 24rpx;
+  line-height: 36rpx;
+  text-align: center;
+}
 
 /* 底部弹层通用（与推荐页一致） */
 .overlay {

@@ -55,7 +55,8 @@ function nlNormalize(word) {
   for (var i = 0; i < std.length; i++) {
     if (word.indexOf(std[i]) >= 0 || std[i].indexOf(word) >= 0) return std[i];
   }
-  return null;
+  // 预设表中无匹配时，返回原始词（作为动态 chip 使用）
+  return word;
 }
 
 function nlExtract(text, patterns) {
@@ -78,17 +79,23 @@ function nlExtract(text, patterns) {
   return found;
 }
 
-// 偏好词 → profile 组
+// 偏好词 → profile 组（含 fallback 启发式）
 function nlKeyOfPrefer(item) {
   var map = {
     '川': 'cuisine', '粤': 'cuisine', '家常': 'cuisine', '日式': 'cuisine', '西式': 'cuisine', '轻食': 'cuisine',
     '米饭': 'staple', '面': 'staple', '杂粮': 'staple', '薯类': 'staple',
     '苹果': 'fruit', '香蕉': 'fruit', '橘子': 'fruit', '猕猴桃': 'fruit', '蓝莓': 'fruit', '草莓': 'fruit'
   };
-  return map[item] || null;
+  if (map[item]) return map[item];
+  // fallback: 含"菜/餐/食/汤/面/饭/粥/粉/包/饺/锅/鱼/肉/鸡/鸭/牛/羊"等字 → 归入菜系
+  if (/菜|餐|食|汤|面|饭|粥|粉|包|饺|锅|鱼|肉|鸡|鸭|牛|羊|猪|虾|蟹|蚝|蛏|贝|肠|排|煲|烧|烤|炖|蒸|卤|腌|酿|酥|饼/.test(item)) return 'cuisine';
+  // 含"果/莓/桃/梨/瓜/蕉/柑/橙/柚/柠|葡|柿" → 水果
+  if (/果|莓|桃|梨|瓜|蕉|柑|橙|柚|柠|葡|柿/.test(item)) return 'fruit';
+  // 其余 → 归入菜系（最宽泛的默认分组）
+  return 'cuisine';
 }
 
-// 忌口词 → profile 组
+// 忌口词 → profile 组（含 fallback 启发式）
 function nlKeyOfAvoid(item) {
   var map = {
     '辣': 'avoidTaste', '油腻': 'avoidTaste', '甜': 'avoidTaste', '咸': 'avoidTaste',
@@ -96,7 +103,11 @@ function nlKeyOfAvoid(item) {
     '芒果': 'avoidFruit', '菠萝': 'avoidFruit', '榴莲': 'avoidFruit', '荔枝': 'avoidFruit', '桃子': 'avoidFruit',
     '虾': 'avoidVeg'
   };
-  return map[item] || null;
+  if (map[item]) return map[item];
+  // fallback: 含口味相关字 → avoidTaste; 含植物字 → avoidVeg; 含水果字 → avoidFruit
+  if (/辣|甜|咸|酸|苦|涩|腥|膻|腻|油|糖|盐|酒|咖啡|浓|淡|冷|热|烫/.test(item)) return 'avoidTaste';
+  if (/菜|葱|姜|蒜|芹|韭|芫|菇|笋|藻|芽|苔|草|茶|豆|腐|果|核|壳|仁/.test(item)) return 'avoidVeg';
+  return 'avoidTaste'; // 默认归入口味忌口
 }
 
 // 主入口：分析文本，返回 { prefer: [...], avoid: [...], applied: [...] }

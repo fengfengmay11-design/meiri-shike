@@ -488,6 +488,69 @@ Page({
 
   noop() {},
 
+  // 将自由填写文本拆分为标签，智能归组并添加为动态 chip
+  addCustomAsChips() {
+    var isPrefer = this.data.sheetKey === 'prefer';
+    var customVal = isPrefer ? (this.data.profile.customPrefer || '') : (this.data.profile.customAvoid || '');
+    if (!customVal.trim()) {
+      wx.showToast({ title: '请先输入内容', icon: 'none' }); return;
+    }
+    // 按常见分隔符拆分
+    var items = customVal.trim().split(/[,，、；;\/\s]+/).filter(function (s) {
+      return s.length > 0 && s.length <= 10;
+    });
+    if (!items.length) {
+      wx.showToast({ title: '未识别到有效内容', icon: 'none' }); return;
+    }
+    var prof = JSON.parse(JSON.stringify(this.data.profile));
+    var added = 0;
+    items.forEach(function (item) {
+      item = item.replace(/[的了呢吧啊哦呀嘛]/g, '');
+      if (!item || item.length < 1) return;
+      var targetKey = null;
+      if (isPrefer) {
+        if (/菜|餐|食|汤|面|饭|粥|粉|包|饺|锅|鱼|肉|鸡|鸭|牛|羊|猪|虾|蟹|蚝|蛏|贝|肠|排|煲|烧|烤|炖|蒸|卤|腌|酿|酥|饼/.test(item)) targetKey = 'cuisine';
+        else if (/果|莓|桃|梨|瓜|蕉|柑|橙|柚|柠|葡|柿/.test(item)) targetKey = 'fruit';
+        else if (/米|饭|面|粥|粉|包|饺|面包|馒头|饼/.test(item)) targetKey = 'staple';
+        else targetKey = 'cuisine';
+      } else {
+        if (/辣|甜|咸|酸|苦|涩|腥|膻|腻|油|糖|盐|酒|咖啡|浓|淡|冷|热|烫/.test(item)) targetKey = 'avoidTaste';
+        else if (/菜|葱|姜|蒜|芹|韭|芫|菇|笋|藻|芽|苔|草|茶|豆|腐|果|核|壳|仁/.test(item)) targetKey = 'avoidVeg';
+        else targetKey = 'avoidTaste';
+      }
+      var arr = (prof[targetKey] || []);
+      if (arr.indexOf(item) < 0) {
+        arr.push(item);
+        prof[targetKey] = arr;
+        added++;
+      }
+    });
+    if (added === 0) {
+      wx.showToast({ title: '所有内容已存在或无效', icon: 'none' }); return;
+    }
+    // 清空自由填写框
+    if (isPrefer) prof.customPrefer = '';
+    else prof.customAvoid = '';
+    this.setData({ profile: prof });
+    storage.setProfile(prof);
+    this.refreshSummaries();
+    wx.showToast({ title: '已添加 ' + added + ' 个标签', icon: 'none' });
+  },
+
+  // 移除动态 chip（仅动态 chip 有 × 按钮）
+  removeDynamicChip(e) {
+    var g = e.currentTarget.dataset.group;
+    var v = e.currentTarget.dataset.val;
+    var prof = JSON.parse(JSON.stringify(this.data.profile));
+    var arr = (prof[g] || []);
+    var idx = arr.indexOf(v);
+    if (idx >= 0) arr.splice(idx, 1);
+    prof[g] = arr;
+    this.setData({ profile: prof });
+    storage.setProfile(prof);
+    this.refreshSummaries();
+  },
+
   save() {
     storage.setProfile(this.data.profile);
     wx.showToast({ title: '已保存', icon: 'success' });
