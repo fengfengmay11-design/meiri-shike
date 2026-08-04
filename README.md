@@ -2,6 +2,8 @@
 
 > 解决「今天吃什么」这个世纪难题——基于身心状态的个性化三餐推荐，覆盖推荐引擎、健康管理、食堂对接、多平台比价的完整产品闭环。
 
+**项目简介**：AI 驱动的校园/职场餐食推荐小程序。基于身心状态×口味×忌口的打分引擎一键推荐，接入腾讯混元大模型做 AI 营养师对话，周边餐厅三平台（美团/饿了么/到店自取）比价，覆盖 1969 所高校。采用微信云函数 + 单文件 HTML 双形态交付，vibe coding 作品集。
+
 [![Demo](https://img.shields.io/badge/Demo-在线体验-FF6B35)](https://fengfengmay11-design.github.io/meiri-shike/)
 [![WeChat MiniProgram](https://img.shields.io/badge/微信小程序-工程完整-07C160)](./miniprogram/)
 [![Vibe Coding](https://img.shields.io/badge/开发方式-Vibe%20Coding-blueviolet)](#-开发方式vibe-coding)
